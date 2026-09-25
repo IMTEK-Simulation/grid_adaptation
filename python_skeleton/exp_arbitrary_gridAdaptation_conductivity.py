@@ -39,9 +39,18 @@ from muFFTTO.visualization_utils import plot_field_on_grid
 # User settings
 # ============================================================================
 
-INPUT_FILE = Path(
-    "/home/martin/Programming/new_programming_folders/grid_adaptation/python_skeleton/uv.lock"
+# INPUT_FILE = Path(
+#    "/home/martin/Programming/new_programming_folders/grid_adaptation/python_skeleton/uv.lock"# #
+#)
+
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+INPUT_FILE = (
+    BASE_DIR
+    / "Grain Boundaries Data"
+    / "Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
 )
+
 
 PROBLEM_TYPE = "conductivity"
 DISCRETIZATION_TYPE = "finite_element"
@@ -443,11 +452,11 @@ def main() -> None:
             macro_gradient_field_ijqxyz=macro_gradient_field,
         )
 
-        macro_gradient_field.s[...] = np.einsum(
-            "ij...,jk...->ik...",
-            macro_gradient_field.s[...],
-            inv_F,
-        )
+        #macro_gradient_field.s[...] = np.einsum(
+        #    "ij...,jk...->ik...",
+        #    macro_gradient_field.s[...],
+        #    inv_F,
+        #)
         discretization.fft.communicate_ghosts(
             field=macro_gradient_field
         )

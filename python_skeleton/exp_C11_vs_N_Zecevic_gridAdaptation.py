@@ -2,7 +2,7 @@
 
 WHAT THIS SCRIPT DOES (in plain words)
 ---------------------------------------
-Your original script `exp_grid_adaptation_arbitrary_conductivity_transformed.py`
+Your original script `exp_arbitrary_gridAdaptation_conductivity.py`
 runs ONE simulation for a fixed grid size NUMBER_OF_PIXELS = (N, N) and prints
 a 2x2 "homogenized conductivity" matrix. The top-left entry of that matrix is
 C11 (row 0, column 0).
@@ -42,10 +42,10 @@ This version handles that gracefully with THREE layers of defense:
 HOW TO RUN
 ----------
 Single process (recommended first, to make sure it works):
-    python exp_grid_adaptation_C11_vs_N.py
+    python exp_C11_vs_N_Zecevic_gridAdaptation.py
 
 With MPI (only if your original script normally uses MPI):
-    mpiexec -n 4 python exp_grid_adaptation_C11_vs_N.py
+    mpiexec -n 4 python exp_C11_vs_N_Zecevic_gridAdaptation.py
 
 BEFORE YOU RUN
 --------------
@@ -85,11 +85,14 @@ print("=== end sanity check ===")
 # ============================================================================
 
 # Same input image you used in the original script.
-INPUT_FILE = Path(
-    r"C:\Users\Test\Desktop\JiaLing\HiWi\Simulation"
-    r"\Grain Boundaries Data"
-    r"\Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
+BASE_DIR = Path(__file__).resolve().parents[2]
+
+INPUT_FILE = (
+    BASE_DIR
+    / "Grain Boundaries Data"
+    / "Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
 )
+
 
 PROBLEM_TYPE = "conductivity"
 DISCRETIZATION_TYPE = "finite_element"
@@ -385,9 +388,9 @@ def run_one_N(N: int, communicator) -> dict:
                 macro_gradient_field_ijqxyz=macro_gradient_field,
             )
 
-            macro_gradient_field.s[...] = np.einsum(
-                "ij...,jk...->ik...", macro_gradient_field.s[...], inv_F
-            )
+            #macro_gradient_field.s[...] = np.einsum(
+            #    "ij...,jk...->ik...", macro_gradient_field.s[...], inv_F
+            #)
             discretization.fft.communicate_ghosts(field=macro_gradient_field)
 
             rhs_field.sg.fill(0.0)

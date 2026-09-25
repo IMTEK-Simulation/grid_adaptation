@@ -39,7 +39,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-import pandas as pd
+#import pandas as pd
 import muGrid
 
 import matplotlib.pyplot as plt
@@ -57,8 +57,14 @@ from muFFTTO import domain
 # ============================================================
 # Import Data and Find Edges & Phases
 # ============================================================
-path = r'C:\Users\Test\Desktop\JiaLing\HiWi\Simulation\Grain Boundaries Data\Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy'
+base_dir = Path(__file__).resolve().parents[2]
+path = (
+    base_dir
+    / "Grain Boundaries Data"
+    / "Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
+)
 data = np.load(path).astype(np.float32)
+
 if data.ndim != 2:
     raise ValueError(
         f"Expected a 2D input image, but got shape {data.shape}."
