@@ -1,4 +1,4 @@
-# !!! free the boundary!!!
+# !!! periodic boundary!!!
 import sys
 import os
 
@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from mpi4py import MPI
 import numpy as np
-import time
+import
 import matplotlib.pyplot as plt
 from muGrid import Solvers
 
@@ -14,7 +14,7 @@ from muFFTTO import domain
 from muFFTTO import microstructure_library
 from muFFTTO.visualization_utils import plot_field_on_grid
 
-from muFFTTO.grid_adaptation_methods import adapt_grid_to_circle, adapt_grid_to_circle_EXAMPLE_
+from muFFTTO.grid_adaptation_methods_original import adapt_grid_to_circle, adapt_grid_to_circle_EXAMPLE_
 
 # Copy of an example of how to usu muFFTTO to solve the homogenization problem for 2D heat conductivity problem
 # using deformed grid with Jia's function for deformation
@@ -22,10 +22,10 @@ from muFFTTO.grid_adaptation_methods import adapt_grid_to_circle, adapt_grid_to_
 problem_type = 'conductivity'
 discretization_type = 'finite_element'
 element_type = 'linear_triangles'
-geometry_ID = 'square_inclusion'
+# geometry_ID = 'square_inclusion'
 
 domain_size = (1, 1)
-number_of_pixels = (32, 32)
+number_of_pixels = (32,32)
 
 my_cell = domain.PeriodicUnitCell(domain_size=domain_size,
                                   problem_type=problem_type)
@@ -52,9 +52,8 @@ result = adapt_grid_to_circle_EXAMPLE_(
     nb_grid_points=number_of_pixels,
     domain_size=domain_size, center=(0.5, 0.5), radius=0.2,
     reference_grid_points_coords=discretization.get_nodal_points_coordinates().s[:, 0, ...],
-    iters=80, omega=0.8
+    iters=80, omega=0.8,b=0
 )
-
 coords_of_displaced_nodes = result["coords_of_displaced_nodes"]
 phase_indicator_array = result["inside"]
 
@@ -96,11 +95,13 @@ discretization.fft.communicate_ghosts(grid_nodes_displacement_inxyz)
 discretization.apply_gradient_operator_mugrid(grid_nodes_displacement_inxyz, F_ijqxy)
 F_ijqxy.s[...] += np.eye(2)[:, :, None, None, None]
 # determinant and inverse of the deformation gradient
-det_F = np.linalg.det(F_ijqxy.s.transpose(2, 3, 4, 0, 1))
-inv_F = np.linalg.pinv(F_ijqxy.s.transpose(2, 3, 4, 0, 1)).transpose(3, 4, 0, 1, 2)
+det_F = discretization.get_quad_field_scalar(name='determinant_F')
+det_F.s[0,0,...] = np.linalg.det(F_ijqxy.s.transpose(2, 3, 4, 0, 1))
+inv_F = discretization.get_displacement_gradient_sized_field(name='inverse_of_F')
+inv_F.s[...] = np.linalg.pinv(F_ijqxy.s.transpose(2, 3, 4, 0, 1)).transpose(3, 4, 0, 1, 2)
 
 # plot def_F in grid
-plot_field_on_grid(coordinates_for_plot=x_plot, field_to_plot=det_F[0], name='det(F)')
+plot_field_on_grid(coordinates_for_plot=x_plot, field_to_plot=det_F.s[0,0,0], name='det(F)')
 
 
 def K_fun(x, Ax):
@@ -147,7 +148,7 @@ for i in range(dim):
                                                    macro_gradient_field_ijqxyz=macro_gradient_field)
 
     # Macro gradient in reference domain
-    macro_gradient_field.s[...] = np.einsum('ij...,jk...->ik...', macro_gradient_field.s[...], inv_F)
+    #macro_gradient_field.s[...] = np.einsum('ij...,jk...->ik...', macro_gradient_field.s[...], inv_F)
     discretization.fft.communicate_ghosts(field=macro_gradient_field)
 
     # Solve equilibrium
@@ -158,7 +159,7 @@ for i in range(dim):
                                                 det_of_deformation_gradient=det_F,
                                                 inv_of_deformation_gradient=inv_F)
 
-
+    # print('enddddddd')
     def callback(iteration, fields):
         """
         Callback function to print the current solution, residual, and search direction.
@@ -211,3 +212,10 @@ if discretization.communicator.rank == 0:
     J_eff = mat_contrast_2 * np.sqrt((mat_contrast_2 + 3 * mat_contrast) / (3 * mat_contrast_2 + mat_contrast))
     print(f'Analytical solution conductivity - A^eff_11  : {J_eff:0.8f}')
     print(f'Numerical solution  conductivity - A^eff_11  : {homogenized_A_ij[0, 0]:0.8f}')
+
+det_values = det_F.s[0, 0, ...]
+print("det(F) min =", np.min(det_values))
+print("det(F) max =", np.max(det_values))
+print("number of det(F) <= 0 =", np.count_nonzero(det_values <= 0))
+print("number of det(F) < 0 =", np.count_nonzero(det_values < 0))
+print("number of det(F) == 0 =", np.count_nonzero(det_values == 0))
