@@ -1,4 +1,3 @@
-# !!! periodic boundary!!!
 import sys
 import os
 
@@ -6,7 +5,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 
 from mpi4py import MPI
 import numpy as np
-import
+import time
 import matplotlib.pyplot as plt
 from muGrid import Solvers
 
@@ -14,18 +13,16 @@ from muFFTTO import domain
 from muFFTTO import microstructure_library
 from muFFTTO.visualization_utils import plot_field_on_grid
 
-from muFFTTO.grid_adaptation_methods_original import adapt_grid_to_circle, adapt_grid_to_circle_EXAMPLE_
-
-# Copy of an example of how to usu muFFTTO to solve the homogenization problem for 2D heat conductivity problem
-# using deformed grid with Jia's function for deformation
+# Example of how to usu muFFTTO to solve the homogenization problem for 2D heat conductivity problem
+# using deformed grid
 
 problem_type = 'conductivity'
 discretization_type = 'finite_element'
 element_type = 'linear_triangles'
-# geometry_ID = 'square_inclusion'
+geometry_ID = 'square_inclusion'
 
-domain_size = (1, 1)
-number_of_pixels = (32,32)
+domain_size = [1, 1]
+number_of_pixels =  (32, 32)
 
 my_cell = domain.PeriodicUnitCell(domain_size=domain_size,
                                   problem_type=problem_type)
@@ -47,27 +44,23 @@ material_data_field_C_0 = discretization.get_material_data_size_field_mugrid(nam
 material_data_field_C_0.s[...] = conductivity_C_1[:, :, np.newaxis, np.newaxis, np.newaxis]
 
 # material distribution
-# TODO[Jia]: Here you have to  place your function
-result = adapt_grid_to_circle_EXAMPLE_(
-    nb_grid_points=number_of_pixels,
-    domain_size=domain_size, center=(0.5, 0.5), radius=0.2,
-    reference_grid_points_coords=discretization.get_nodal_points_coordinates().s[:, 0, ...],
-    iters=80, omega=0.8,b=0
-)
-coords_of_displaced_nodes = result["coords_of_displaced_nodes"]
-phase_indicator_array = result["inside"]
+phase_field_geom = microstructure_library.get_geometry(nb_voxels=discretization.nb_of_pixels,
+                                                       microstructure_name=geometry_ID,
+                                                       coordinates=discretization.fft.coords)
 
 phase_field = discretization.get_scalar_field(name='phase_field')
-phase_field.s[0, 0] = phase_indicator_array
-matrix_mask = phase_indicator_array > 0
-inc_mask = phase_indicator_array == 0
+phase_field.s[0, 0] = phase_field_geom
+# background: matrix -> mat_contrast_2
+# pattern: inc -> mat_contrast
+matrix_mask = phase_field_geom > 0
+inc_mask = phase_field_geom == 0
 
 # apply material distribution
 material_data_field_C_0.s[..., matrix_mask] = mat_contrast_2 * material_data_field_C_0.s[..., matrix_mask]
 material_data_field_C_0.s[..., inc_mask] = mat_contrast * material_data_field_C_0.s[..., inc_mask]
 # --------------------------------------------------------------------------------------------------------------------- #
 # Reference coordinates
-ref_grid_coords_ixyz = discretization.get_nodal_points_coordinates().s[:, 0, ...]
+ref_grid_coords_ixyz = discretization.fft.coords
 
 # Deformed coordinates
 def_grid_coords_inxyz = discretization.get_displacement_sized_field(name='deformed_nodal_points_coordinates_inxyz')
@@ -76,10 +69,13 @@ def_grid_coords_inxyz = discretization.get_displacement_sized_field(name='deform
 grid_nodes_displacement_inxyz = discretization.get_displacement_sized_field(name='grid_nodes_displacement_inxyz')
 
 grid_nodes_displacement_inxyz.s.fill(0)
-grid_nodes_displacement_inxyz.s[:, 0, ...] = coords_of_displaced_nodes - ref_grid_coords_ixyz
+grid_nodes_displacement_inxyz.s[0, 0, ...] = (0.1 * np.sin(2 * np.pi * ref_grid_coords_ixyz[0, ...]) *
+                                              np.sin(2 * np.pi * ref_grid_coords_ixyz[1, ...]))
 
 # fill in the  deformation with analytical
 def_grid_coords_inxyz.s[:, 0, ...] = ref_grid_coords_ixyz[...] + grid_nodes_displacement_inxyz.s[:, 0, ...]
+# def_coords_inxyz.s[1, 0, ...] = ref_coords_ixyz[1, ...] + 0.1 * np.cos(2 * np.pi * ref_coords_ixyz[1, ...])
+
 
 # Deformed coords with periodic extension for plotting
 x_plot = discretization.get_nodal_points_coordinates_with_periodic_nodes()
@@ -97,6 +93,7 @@ F_ijqxy.s[...] += np.eye(2)[:, :, None, None, None]
 # determinant and inverse of the deformation gradient
 det_F = discretization.get_quad_field_scalar(name='determinant_F')
 det_F.s[0,0,...] = np.linalg.det(F_ijqxy.s.transpose(2, 3, 4, 0, 1))
+
 inv_F = discretization.get_displacement_gradient_sized_field(name='inverse_of_F')
 inv_F.s[...] = np.linalg.pinv(F_ijqxy.s.transpose(2, 3, 4, 0, 1)).transpose(3, 4, 0, 1, 2)
 
@@ -148,7 +145,6 @@ for i in range(dim):
                                                    macro_gradient_field_ijqxyz=macro_gradient_field)
 
     # Macro gradient in reference domain
-    #macro_gradient_field.s[...] = np.einsum('ij...,jk...->ik...', macro_gradient_field.s[...], inv_F)
     discretization.fft.communicate_ghosts(field=macro_gradient_field)
 
     # Solve equilibrium
@@ -159,7 +155,7 @@ for i in range(dim):
                                                 det_of_deformation_gradient=det_F,
                                                 inv_of_deformation_gradient=inv_F)
 
-    # print('enddddddd')
+
     def callback(iteration, fields):
         """
         Callback function to print the current solution, residual, and search direction.
@@ -212,10 +208,3 @@ if discretization.communicator.rank == 0:
     J_eff = mat_contrast_2 * np.sqrt((mat_contrast_2 + 3 * mat_contrast) / (3 * mat_contrast_2 + mat_contrast))
     print(f'Analytical solution conductivity - A^eff_11  : {J_eff:0.8f}')
     print(f'Numerical solution  conductivity - A^eff_11  : {homogenized_A_ij[0, 0]:0.8f}')
-
-det_values = det_F.s[0, 0, ...]
-print("det(F) min =", np.min(det_values))
-print("det(F) max =", np.max(det_values))
-print("number of det(F) <= 0 =", np.count_nonzero(det_values <= 0))
-print("number of det(F) < 0 =", np.count_nonzero(det_values < 0))
-print("number of det(F) == 0 =", np.count_nonzero(det_values == 0))

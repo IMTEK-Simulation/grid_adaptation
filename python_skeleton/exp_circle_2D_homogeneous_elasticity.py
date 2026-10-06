@@ -15,7 +15,7 @@ from muFFTTO import domain
 from muFFTTO import microstructure_library
 
 from muFFTTO.visualization_utils import plot_field_on_grid, get_deformed_grid_coords_two_dim
-from muFFTTO.grid_adaptation_methods import adapt_grid_to_circle, adapt_grid_to_circle_EXAMPLE_
+from muFFTTO.grid_adaptation_methods_Zecevic import adapt_grid_to_circle, adapt_grid_to_circle_EXAMPLE_
 
 # Example of how to usu muFFTTO to solve the homogenization problem for 2D elasticity problem
 # using deformed grid

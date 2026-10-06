@@ -15,7 +15,7 @@ from muFFTTO import microstructure_library
 
 problem_type = 'conductivity'
 discretization_type = 'finite_element'
-element_type = 'linear_triangles'
+element_type = 'bilinear_rectangle'
 geometry_ID = 'square_inclusion'
 
 domain_size = [1, 1]

@@ -34,14 +34,11 @@ from muFFTTO.grid_adaptation_arbitrary import (
 )
 from muFFTTO import domain
 from muFFTTO.visualization_utils import plot_field_on_grid
+# from muFFTTO.check_homogenization_health import run_homogenization_health_check
 
 # ============================================================================
 # User settings
 # ============================================================================
-
-# INPUT_FILE = Path(
-#    "/home/martin/Programming/new_programming_folders/grid_adaptation/python_skeleton/uv.lock"# #
-#)
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 
@@ -50,7 +47,6 @@ INPUT_FILE = (
     / "Grain Boundaries Data"
     / "Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
 )
-
 
 PROBLEM_TYPE = "conductivity"
 DISCRETIZATION_TYPE = "finite_element"
@@ -452,11 +448,11 @@ def main() -> None:
             macro_gradient_field_ijqxyz=macro_gradient_field,
         )
 
-        #macro_gradient_field.s[...] = np.einsum(
-        #    "ij...,jk...->ik...",
-        #    macro_gradient_field.s[...],
-        #    inv_F,
-        #)
+        # macro_gradient_field.s[...] = np.einsum(
+        #     "ij...,jk...->ik...",
+        #     macro_gradient_field.s[...],
+        #     inv_F,
+        # )
         discretization.fft.communicate_ghosts(
             field=macro_gradient_field
         )
@@ -559,7 +555,7 @@ def main() -> None:
         print("det(F) max:", det_F_from_plot.max())
         print("det(F) interior min:", det_F_from_plot[1:-1, 1:-1].min())
         print("det(F) interior max:", det_F_from_plot[1:-1, 1:-1].max())
-   # health_report = run_homogenization_health_check(det_F, homogenized_A_ij)
+    #health_report = run_homogenization_health_check(det_F, homogenized_A_ij)
 
 if __name__ == "__main__":
     main()

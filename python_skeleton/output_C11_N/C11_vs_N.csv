@@ -1,7 +1,0 @@
-N,C11,converged,det_F_min,det_F_max,error
-4,nan,False,nan,nan,AttributeError("'numpy.ndarray' object has no attribute 's'")
-8,nan,False,nan,nan,AttributeError("'numpy.ndarray' object has no attribute 's'")
-16,nan,False,nan,nan,AttributeError("'numpy.ndarray' object has no attribute 's'")
-32,nan,False,nan,nan,AttributeError("'numpy.ndarray' object has no attribute 's'")
-64,nan,False,nan,nan,AttributeError("'numpy.ndarray' object has no attribute 's'")
-128,nan,False,nan,nan,AttributeError("'numpy.ndarray' object has no attribute 's'")

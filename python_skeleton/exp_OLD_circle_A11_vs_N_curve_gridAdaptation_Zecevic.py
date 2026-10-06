@@ -1,8 +1,10 @@
+
+
 """C11 vs N convergence sweep for muFFTTO grid-adaptation homogenization.
 
 WHAT THIS SCRIPT DOES (in plain words)
 ---------------------------------------
-Your original script `exp_arbitrary_gridAdaptation_conductivity.py`
+Your original script `exp_grid_adaptation_arbitrary_conductivity_transformed.py`
 runs ONE simulation for a fixed grid size NUMBER_OF_PIXELS = (N, N) and prints
 a 2x2 "homogenized conductivity" matrix. The top-left entry of that matrix is
 C11 (row 0, column 0).
@@ -42,10 +44,10 @@ This version handles that gracefully with THREE layers of defense:
 HOW TO RUN
 ----------
 Single process (recommended first, to make sure it works):
-    python exp_C11_vs_N_Zecevic_gridAdaptation.py
+    python exp_grid_adaptation_C11_vs_N.py
 
 With MPI (only if your original script normally uses MPI):
-    mpiexec -n 4 python exp_C11_vs_N_Zecevic_gridAdaptation.py
+    mpiexec -n 4 python exp_grid_adaptation_C11_vs_N.py
 
 BEFORE YOU RUN
 --------------
@@ -68,18 +70,11 @@ import matplotlib.pyplot as plt
 from mpi4py import MPI
 from muGrid import Solvers
 from muGrid.Solvers import ConvergenceError
+from muFFTTO.grid_adaptation_methods_Zecevic import adapt_grid_to_circle
 
 from muFFTTO.grid_adaptation_arbitrary import run_grid_adaptation_workflow
 from muFFTTO import domain
-import inspect
-print("=== domain_2 sanity check ===")
-print("File:", domain.__file__)
-print("--- get_rhs_mugrid_deformed_grid ---")
-print(inspect.getsource(domain.Discretization.get_rhs_mugrid_deformed_grid))
-print("--- get_homogenized_stress_mugrid_deformed_grid ---")
-print(inspect.getsource(domain.Discretization.get_homogenized_stress_mugrid_deformed_grid))
-print("=== end sanity check ===")
-
+from muFFTTO.visualization_utils import plot_field_on_grid
 # ============================================================================
 # User settings
 # ============================================================================
@@ -93,7 +88,6 @@ INPUT_FILE = (
     / "Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
 )
 
-
 PROBLEM_TYPE = "conductivity"
 DISCRETIZATION_TYPE = "finite_element"
 ELEMENT_TYPE = "linear_triangles"
@@ -101,7 +95,7 @@ ELEMENT_TYPE = "linear_triangles"
 DOMAIN_SIZE = (1.0, 1.0)
 
 # The list of grid resolutions N to sweep over. NUMBER_OF_PIXELS = (N, N).
-N_VALUES = [4,8,16,32,64,128]
+N_VALUES = [32] # 4,8,16, ,64,128
 
 RELAX_ITERS = 200
 RELAX_OMEGA = 0.02
@@ -245,17 +239,24 @@ def run_one_N(N: int, communicator) -> dict:
     print("nb_quad_points_per_pixel =", discretization.nb_quad_points_per_pixel)
 
     result = run_grid_adaptation_workflow(
-        input_path=INPUT_FILE,
-        coarse_Nx=number_of_pixels[0],
-        coarse_Ny=number_of_pixels[1],
-        Lx=DOMAIN_SIZE[0],
-        Ly=DOMAIN_SIZE[1],
-        relax_iters=RELAX_ITERS,
-        relax_omega=RELAX_OMEGA,
-        relax_b=RELAX_B,
-        verbose=(communicator.rank == 0 and VERBOSE),
+       input_path=INPUT_FILE,
+       coarse_Nx=number_of_pixels[0],
+       coarse_Ny=number_of_pixels[1],
+       Lx=DOMAIN_SIZE[0],
+       Ly=DOMAIN_SIZE[1],
+       relax_iters=RELAX_ITERS,
+       relax_omega=RELAX_OMEGA,
+       relax_b=RELAX_B,
+       verbose=(communicator.rank == 0 and VERBOSE),
     )
-
+   #  result = adapt_grid_to_circle_EXAMPLE_(
+   #      nb_grid_points=number_of_pixels,
+   #      domain_size=DOMAIN_SIZE,
+   #      center=(0.5, 0.5),
+   #      radius=0.2,
+   #      reference_grid_points_coords=discretization.get_nodal_points_coordinates().s[:, 0, ...],
+   #      iters=80, omega=0.8, b=0
+   #  )
     coords_of_displaced_nodes = result["coords_of_displaced_nodes"]
     phase_indicator_array = result["coarse_phase_label"].astype(np.int32)
     coordinates_for_plot = result["full_plot_coords_of_displaced_nodes"]
@@ -331,12 +332,15 @@ def run_one_N(N: int, communicator) -> dict:
 
 
     deformation_gradient_array = deformation_gradient.s.transpose(2, 3, 4, 0, 1)
-    det_F = np.linalg.det(deformation_gradient_array)
-    inv_F = np.linalg.pinv(deformation_gradient_array).transpose(3, 4, 0, 1, 2)
+    det_F = discretization.get_quad_field_scalar(name='determinant_F')
+    det_F.s[0,0,...] =np.linalg.det(deformation_gradient_array)
+
+    inv_F = discretization.get_displacement_gradient_sized_field(name='inverse_of_F')
+    inv_F.s[...] = np.linalg.pinv(deformation_gradient_array).transpose(3, 4, 0, 1, 2)
 
     print(f"N={N}: det_F.shape = {det_F.shape}")
-    print(f"N={N}: det_F min/max = {det_F.min():.4f} / {det_F.max():.4f}")
-    print(f"N={N}: inverted count = {(det_F <= 0).sum()} / {det_F.size}")
+    print(f"N={N}: det_F min/max = {det_F.s.min():.4f} / {det_F.s.max():.4f}")
+    print(f"N={N}: inverted count = {(det_F.s <= 0).sum()} / {det_F.s.size}")
 
     def K_fun(x, Ax):
         discretization.apply_system_matrix_mugrid_deformed_grid(
@@ -377,64 +381,64 @@ def run_one_N(N: int, communicator) -> dict:
         return callback
 
     # --- Layer 2: fault tolerance around the CG solve -----------------------
-    try:
-        for direction in range(dimension):
-            macro_gradient = np.zeros(dimension)
-            macro_gradient[direction] = 1.0
+    #try:
+    for direction in range(dimension):
+        macro_gradient = np.zeros(dimension)
+        macro_gradient[direction] = 1.0
 
-            macro_gradient_field.sg.fill(0.0)
-            discretization.get_macro_gradient_field_mugrid(
-                macro_gradient_ij=macro_gradient,
-                macro_gradient_field_ijqxyz=macro_gradient_field,
-            )
+        macro_gradient_field.sg.fill(0.0)
+        discretization.get_macro_gradient_field_mugrid(
+            macro_gradient_ij=macro_gradient,
+            macro_gradient_field_ijqxyz=macro_gradient_field,
+        )
 
-            #macro_gradient_field.s[...] = np.einsum(
-            #    "ij...,jk...->ik...", macro_gradient_field.s[...], inv_F
-            #)
-            discretization.fft.communicate_ghosts(field=macro_gradient_field)
+        # macro_gradient_field.s[...] = np.einsum(
+        #     "ij...,jk...->ik...", macro_gradient_field.s[...], inv_F
+        # )
+        discretization.fft.communicate_ghosts(field=macro_gradient_field)
 
-            rhs_field.sg.fill(0.0)
-            discretization.get_rhs_mugrid_deformed_grid(
-                material_data_field_ijklqxyz=material_data_field,
-                macro_gradient_field_ijqxyz=macro_gradient_field,
-                rhs_inxyz=rhs_field,
-                det_of_deformation_gradient=det_F,
-                inv_of_deformation_gradient=inv_F,
-            )
+        rhs_field.sg.fill(0.0)
+        discretization.get_rhs_mugrid_deformed_grid(
+            material_data_field_ijklqxyz=material_data_field,
+            macro_gradient_field_ijqxyz=macro_gradient_field,
+            rhs_inxyz=rhs_field,
+            det_of_deformation_gradient=det_F,
+            inv_of_deformation_gradient=inv_F,
+        )
 
-            solution_field.sg.fill(0.0)
-            Solvers.conjugate_gradients(
-                comm=discretization.communicator,
-                fc=discretization.field_collection,
-                hessp=K_fun,
-                b=rhs_field,
-                x=solution_field,
-                prec=M_fun,
-                rtol=SOLVER_RTOL,
-                maxiter=SOLVER_MAXITER,
-                callback=make_callback(),
-            )
+        solution_field.sg.fill(0.0)
+        Solvers.conjugate_gradients(
+            comm=discretization.communicator,
+            fc=discretization.field_collection,
+            hessp=K_fun,
+            b=rhs_field,
+            x=solution_field,
+            prec=M_fun,
+            rtol=SOLVER_RTOL,
+            maxiter=SOLVER_MAXITER,
+            callback=make_callback(),
+        )
 
-            discretization.fft.communicate_ghosts(field=solution_field)
+        discretization.fft.communicate_ghosts(field=solution_field)
 
-            homogenized_A_ij[direction, :] = discretization.get_homogenized_stress_mugrid_deformed_grid(
-                material_data_field_ijklqxyz=material_data_field,
-                temperature_field_inxyz=solution_field,
-                macro_gradient_field_ijqxyz=macro_gradient_field,
-                det_of_deformation_gradient=det_F,
-                inv_of_deformation_gradient=inv_F,
-            )
+        homogenized_A_ij[direction, :] = discretization.get_homogenized_stress_mugrid_deformed_grid(
+            material_data_field_ijklqxyz=material_data_field,
+            temperature_field_inxyz=solution_field,
+            macro_gradient_field_ijqxyz=macro_gradient_field,
+            det_of_deformation_gradient=det_F,
+            inv_of_deformation_gradient=inv_F,
+        )
 
-    except ConvergenceError as exc:
-        if communicator.rank == 0:
-            print(f"N = {N}: CG DID NOT CONVERGE ({exc}). Marking this N as failed.")
-        return {
-            "homogenized_A_ij": None,
-            "converged": False,
-            "det_F_min": det_F_min,
-            "det_F_max": det_F_max,
-            "error": str(exc),
-        }
+    #except ConvergenceError as exc:
+    #        if communicator.rank == 0:
+    #            print(f"N = {N}: CG DID NOT CONVERGE ({exc}). Marking this N as failed.")
+    #        return {
+    #            "homogenized_A_ij": None,
+    #            "converged": False,
+    #            "det_F_min": det_F_min,
+    #            "det_F_max": det_F_max,
+    #            "error": str(exc),
+   #         }
 
     if communicator.rank == 0:
         print(
@@ -447,7 +451,8 @@ def run_one_N(N: int, communicator) -> dict:
         print(f"N = {N}: C11 = {homogenized_A_ij[0, 0]:.8f}")
 
     if VERBOSE:
-        run_homogenization_health_check(det_F, homogenized_A_ij)
+        print('A')
+        #run_homogenization_health_check(det_F, homogenized_A_ij)
 
     return {
         "homogenized_A_ij": homogenized_A_ij,
@@ -479,18 +484,18 @@ def main() -> None:
     for N in N_VALUES:
         # --- Layer 2 (outer safety net): even if something unexpected other
         # than ConvergenceError goes wrong for one N, keep the sweep alive.
-        try:
-            outcome = run_one_N(N, communicator)
-        except Exception as exc:  # noqa: BLE001 - intentionally broad for a sweep
-            if communicator.rank == 0:
-                print(f"N = {N}: FAILED with unexpected error: {exc!r}. Skipping.")
-            outcome = {
-                "homogenized_A_ij": None,
-                "converged": False,
-                "det_F_min": float("nan"),
-                "det_F_max": float("nan"),
-                "error": repr(exc),
-            }
+        #try:
+        outcome = run_one_N(N, communicator)
+       # except Exception as exc:  # noqa: BLE001 - intentionally broad for a sweep
+        #    if communicator.rank == 0:
+       #         print(f"N = {N}: FAILED with unexpected error: {exc!r}. Skipping.")
+       #     outcome = {
+      #          "homogenized_A_ij": None,
+       #         "converged": False,
+       #         "det_F_min": float("nan"),
+       #         "det_F_max": float("nan"),
+       #         "error": repr(exc),
+       #     }
         outcome["N"] = N
         results.append(outcome)
 
@@ -556,4 +561,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
