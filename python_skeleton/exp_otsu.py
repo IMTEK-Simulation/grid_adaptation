@@ -53,6 +53,7 @@ simulation_dir = Path(__file__).resolve().parents[1]
 mufftto_repo_dir = simulation_dir / "muFFTTO"
 sys.path.insert(0, str(mufftto_repo_dir))
 from muFFTTO import domain
+print(sys.executable)
 
 # ============================================================
 # Import Data and Find Edges & Phases
