@@ -29,11 +29,12 @@ from mpi4py import MPI
 from muGrid import Solvers
 
 # Adjust this import if your workflow is stored in another module.
-from muFFTTO.grid_adaptation_arbitrary import (
+from muFFTTO.OLD_grid_adaptation_arbitrary import (
     run_grid_adaptation_workflow,
 )
 from muFFTTO import domain
 from muFFTTO.visualization_utils import plot_field_on_grid
+from muFFTTO import microstructure_library
 # from muFFTTO.check_homogenization_health import run_homogenization_health_check
 
 # ============================================================================
@@ -47,6 +48,8 @@ INPUT_FILE = (
     / "Grain Boundaries Data"
     / "Green_Jacobi_eta_0.01_w_10.0_p_0.0_final.npy"
 )
+
+
 
 PROBLEM_TYPE = "conductivity"
 DISCRETIZATION_TYPE = "finite_element"
@@ -69,10 +72,16 @@ SOLVER_MAXITER = 2000
 #   label 2 -> region conductivity 3.0
 #   label 3 -> region conductivity 4.0
 CONDUCTIVITY_BY_LABEL = {
-    0: 1.0,
-    1: 2.0,
-    2: 3.0,
-    3: 4.0,
+    0: 100.0,
+    1: 1.0,
+    2: 1.0,
+    3: 1.0,
+    4: 1.0,
+    5: 1.0,
+    6: 1.0,
+    7: 1.0,
+    8: 1.0,
+    9: 1.0,
 }
 
 
@@ -228,6 +237,41 @@ def main() -> None:
     #     print("Input image:", INPUT_FILE)
     #     print("MPI processes:", communicator.size)
 
+    # cell = domain.PeriodicUnitCell(
+    #     domain_size=DOMAIN_SIZE,
+    #     problem_type=PROBLEM_TYPE,
+    # )
+    #
+    # discretization = domain.Discretization(
+    #     cell=cell,
+    #     nb_of_pixels_global=(1024,1024),
+    #     discretization_type=DISCRETIZATION_TYPE,
+    #     element_type=ELEMENT_TYPE,
+    # )
+    # # LOAD NEW SHAPE!
+    # geometry_name = 'sinusoidal_ligaments'  # any name from muFFTTO.geometry.available()
+    # geometry_parameters = {}  # passed to the geometry, e.g. {'notch_length': 0.1}
+    # phase_field_geom = microstructure_library.get_geometry(nb_voxels=discretization.nb_of_pixels,
+    #                                                        microstructure_name=geometry_name,
+    #                                                        coordinates=discretization.fft.coords,
+    #                                                        **geometry_parameters)
+    #
+    # output_path = Path(
+    #     f"{geometry_name}_{discretization.nb_of_pixels[0]}x"
+    #     f"{discretization.nb_of_pixels[1]}.npy"
+    # )
+    #
+    # np.save(output_path, phase_field_geom)
+    #
+    # print(f"Saved phase-field geometry to: {output_path}")
+    # print(f"Shape: {phase_field_geom.shape}")
+    # print(f"Dtype: {phase_field_geom.dtype}")
+    # print("hi")
+
+    # ------------------------------------------------------------------------
+    # Image-based grid adaptation and coarse phase labels
+    # ------------------------------------------------------------------------
+
     cell = domain.PeriodicUnitCell(
         domain_size=DOMAIN_SIZE,
         problem_type=PROBLEM_TYPE,
@@ -239,10 +283,12 @@ def main() -> None:
         discretization_type=DISCRETIZATION_TYPE,
         element_type=ELEMENT_TYPE,
     )
+    INPUT_FILE = (
+            BASE_DIR
+            / "sinusoidal_ligaments_1024x1024.npy"
+    )
+    # data = np.load(INPUT_FILE).astype(np.float32)
 
-    # ------------------------------------------------------------------------
-    # Image-based grid adaptation and coarse phase labels
-    # ------------------------------------------------------------------------
     result = run_grid_adaptation_workflow(
         input_path=INPUT_FILE,
         coarse_Nx=NUMBER_OF_PIXELS[0],
@@ -251,7 +297,7 @@ def main() -> None:
         Ly=DOMAIN_SIZE[1],
         relax_iters=RELAX_ITERS,
         relax_omega=RELAX_OMEGA,
-        relax_b=RELAX_B,
+        relax_b=0,
         verbose=(communicator.rank == 0),
     )
 
@@ -264,6 +310,7 @@ def main() -> None:
     coordinates_for_plot = result[
         "full_plot_coords_of_displaced_nodes"
     ]
+
 
     det_F_from_plot = compute_det_F_from_plot_coords(
         coordinates_for_plot=coordinates_for_plot,

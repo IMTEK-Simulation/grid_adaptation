@@ -6,18 +6,19 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from muFFTTO.otsu import otsu_edgeDetection_and_phaseIndicator
-from muFFTTO.grid_adaptation_arbitrary import (
+from muFFTTO.OLD_grid_adaptation_arbitrary import (
     build_regular_coarse_grid,
     make_plot_coords,
     periodic_manhattan_distance_to_mask,
     stiffness_from_distance,
     spring_relax_projected_grid,
     refine_interface_nodes_by_local_square)
+from muFFTTO import domain
 
 simulation_dir = Path(__file__).resolve().parents[1]
 mufftto_repo_dir = simulation_dir / "muFFTTO"
 sys.path.insert(0, str(mufftto_repo_dir))
-from muFFTTO import domain  # noqa: F401
+ # noqa: F401
 
 # ============================================================
 # Main script
