@@ -26,10 +26,23 @@ from muFFTTO.grid_adaptation_methods_Zecevic import adapt_grid_to_circle
 
 problem_type = 'conductivity'
 discretization_type = 'finite_element'
-element_type =  'bilinear_rectangle'
+element_type = 'bilinear_rectangle'
 domain_size = (1, 1)
-center = (0.5,0.5)
-radius = 0.3
+number_of_pixels = (32, 32)
+
+# circular inclusion (may cross the periodic boundary; radius < min(domain_size)/2)
+center = (0.9, 0.9)
+radius = 0.45
+
+# spring parameters
+iters = 600                           # fixed number of relaxation iterations
+b = 0.0                               # stiffness decay exponent
+k0 = 0.25                             # stiffness closest to the interface
+kmin = 0                              # minimum stiffness
+if_spring_relaxation = True           # False: use the projected grid directly
+spring_method = "gauss_seidel"        # "gauss_seidel" (original) or "jacobi_displacement"
+check_inversion_each_iter = False     # True: record inverted cells after every iteration
+inversion_check = "quadrature"
 
 N_values = [8,16,32,64,128,256]
 #N_values = [4,8,16,32]
@@ -53,10 +66,19 @@ def NxN_grids_circleGridAdaptation(N):
 
 
     ref_grid_coords_ixyz = discretization.get_nodal_points_coordinates().s[:, 0, ...]
-    coords_of_displaced_nodes,phase_indicator_array = adapt_grid_to_circle(ref_grid_coords_ixyz,center,radius,b=0,kmin=0) # 回傳 (1)coords_of displaced nodes (2) phase_indicator_array
-    # shape (1) (2,32,32) (2) (32,32)
-    # current phase_indicator_array: 1 -> inc, 0 -> background
-    # (should reverse)
+    adaptation = adapt_grid_to_circle(
+        ref_grid_coords_ixyz=ref_grid_coords_ixyz,
+        center=center,
+        radius=radius,
+        iters=iters,
+        b=b,
+        k0=k0,
+        kmin=kmin,
+        if_spring_relaxation=if_spring_relaxation,
+        spring_method=spring_method,
+        check_inversion_each_iter=check_inversion_each_iter,
+        inversion_check=inversion_check,
+    )
 
     phase_field = discretization.get_scalar_field(name='phase_field')
     phase_field.s[0, 0] = phase_indicator_array

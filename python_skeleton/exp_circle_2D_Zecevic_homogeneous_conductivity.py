@@ -36,8 +36,8 @@ domain_size = (1, 1)
 number_of_pixels = (32, 32)
 
 # circular inclusion (may cross the periodic boundary; radius < min(domain_size)/2)
-center = (0.9, 0.9)
-radius = 0.45
+center = (0.5, 0.5)
+radius = 0.3
 
 # spring parameters
 iters = 600                           # fixed number of relaxation iterations
